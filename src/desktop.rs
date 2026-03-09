@@ -49,7 +49,6 @@ pub fn load_installed_apps() -> Vec<DesktopApp> {
         }
     }
 
-
     apps.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     apps
 }
@@ -102,7 +101,6 @@ fn app_dirs() -> Vec<PathBuf> {
 
     out
 }
-
 
 fn parse_desktop_file(path: &Path) -> Option<DesktopApp> {
     let contents = fs::read_to_string(path).ok()?;
@@ -220,7 +218,10 @@ fn parse_desktop_file(path: &Path) -> Option<DesktopApp> {
 }
 
 fn compact_alnum(input: &str) -> String {
-    input.chars().filter(|c| c.is_ascii_alphanumeric()).collect()
+    input
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .collect()
 }
 
 fn parse_desktop_entry_section(contents: &str) -> Option<HashMap<String, String>> {
@@ -245,9 +246,5 @@ fn parse_desktop_entry_section(contents: &str) -> Option<HashMap<String, String>
         map.insert(key.trim().to_string(), value.trim().to_string());
     }
 
-    if map.is_empty() {
-        None
-    } else {
-        Some(map)
-    }
+    if map.is_empty() { None } else { Some(map) }
 }

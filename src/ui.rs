@@ -114,14 +114,7 @@ fn build_ui(app: &gtk::Application, launcher: Launcher) {
         let status = status.clone();
         let revealer = revealer.clone();
         entry.connect_changed(move |entry| {
-            refresh_results(
-                &launcher,
-                entry,
-                &list,
-                &status,
-                &revealer,
-                &state,
-            );
+            refresh_results(&launcher, entry, &list, &status, &revealer, &state);
         });
     }
 
@@ -162,17 +155,18 @@ fn build_ui(app: &gtk::Application, launcher: Launcher) {
         let list = list.clone();
         let entry = entry.clone();
         let window = window.clone();
+        let scroller_clone = scroller.clone();
         key_controller.connect_key_pressed(move |_, key, _, mods| match key {
             gdk::Key::Escape => {
                 window.close();
                 gtk::glib::Propagation::Stop
             }
             gdk::Key::Down => {
-                move_selection(&list, &state, 1);
+                move_selection(&list, &scroller_clone, &state, 1);
                 gtk::glib::Propagation::Stop
             }
             gdk::Key::Up => {
-                move_selection(&list, &state, -1);
+                move_selection(&list, &scroller_clone, &state, -1);
                 gtk::glib::Propagation::Stop
             }
             gdk::Key::Return => {
@@ -190,14 +184,7 @@ fn build_ui(app: &gtk::Application, launcher: Launcher) {
     }
     window.add_controller(key_controller);
 
-    refresh_results(
-        &launcher,
-        &entry,
-        &list,
-        &status,
-        &revealer,
-        &state,
-    );
+    refresh_results(&launcher, &entry, &list, &status, &revealer, &state);
     window.present();
     entry.grab_focus();
 }
@@ -335,13 +322,18 @@ fn refresh_results(
     }
 
     // Animate the results box in/out
-    let show = !results.is_empty() || !trimmed.is_empty();
+    let show = !trimmed.is_empty();
     revealer.set_reveal_child(show);
 
     state.borrow_mut().results = results;
 }
 
-fn move_selection(list: &gtk::ListBox, state: &Rc<RefCell<UiState>>, delta: i32) {
+fn move_selection(
+    list: &gtk::ListBox,
+    scroller: &gtk::ScrolledWindow,
+    state: &Rc<RefCell<UiState>>,
+    delta: i32,
+) {
     let total = state.borrow().results.len();
     if total == 0 {
         return;
@@ -351,6 +343,20 @@ fn move_selection(list: &gtk::ListBox, state: &Rc<RefCell<UiState>>, delta: i32)
     let next = (current + delta).clamp(0, total.saturating_sub(1) as i32);
     if let Some(row) = list.row_at_index(next) {
         list.select_row(Some(&row));
+
+        let adj = scroller.vadjustment();
+        if let Some(bounds) = row.compute_bounds(list) {
+            let y = bounds.y() as f64;
+            let h = bounds.height() as f64;
+            let val = adj.value();
+            let page = adj.page_size();
+
+            if val > y {
+                adj.set_value(y);
+            } else if val + page < y + h {
+                adj.set_value(y + h - page);
+            }
+        }
     }
 }
 
@@ -379,15 +385,15 @@ window.seekx-window > * {
 }
 
 .seekx-search-box {
-  background-color: #0e0e14;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background-color: #000000;
+  border: 1px solid #ffffff;
   border-radius: 14px;
   padding: 10px 18px;
 }
 
 .seekx-results-box {
-  background-color: #0e0e14;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background-color: #000000;
+  border: 1px solid #ffffff;
   border-radius: 14px;
   padding: 10px 16px;
 }
@@ -395,7 +401,7 @@ window.seekx-window > * {
 entry.seekx-entry,
 entry.seekx-entry text {
   background: transparent;
-  color: #e4e2ec;
+  color: #ffffff;
   border: none;
   border-radius: 0;
   font-size: 18px;
@@ -440,14 +446,14 @@ scrolledwindow.seekx-scroll scrollbar {
 }
 
 scrolledwindow.seekx-scroll scrollbar slider {
-  background-color: rgba(255, 255, 255, 0.08);
+  background-color: #ffffff;
   border-radius: 99px;
   min-width: 4px;
   min-height: 24px;
 }
 
 scrolledwindow.seekx-scroll scrollbar slider:hover {
-  background-color: rgba(255, 255, 255, 0.16);
+  background-color: #cccccc;
 }
 
 list.seekx-list {
@@ -465,31 +471,31 @@ row.seekx-row {
 }
 
 row.seekx-row:hover {
-  background-color: rgba(255, 255, 255, 0.04);
+  background-color: #1a1a1a;
 }
 
 row.seekx-row:selected {
-  background-color: rgba(124, 110, 240, 0.15);
+  background-color: #333333;
   border: none;
 }
 
 row.seekx-row:selected:hover {
-  background-color: rgba(124, 110, 240, 0.22);
+  background-color: #4d4d4d;
 }
 
 label.seekx-label {
-  color: rgba(228, 226, 236, 0.9);
+  color: #cccccc;
   font-size: 14px;
   font-weight: 400;
 }
 
 row.seekx-row:selected label.seekx-label {
-  color: #d8d4f5;
+  color: #ffffff;
   font-weight: 500;
 }
 
 label.seekx-status {
-  color: rgba(180, 175, 200, 0.45);
+  color: #808080;
   font-size: 11px;
   font-weight: 300;
   padding-top: 2px;
