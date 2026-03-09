@@ -5,13 +5,19 @@ use std::rc::Rc;
 use gtk::gdk;
 use gtk::prelude::*;
 use gtk4 as gtk;
+#[cfg(feature = "layer-shell")]
+use gtk4_layer_shell as layer_shell;
+#[cfg(feature = "layer-shell")]
+use gtk4_layer_shell::LayerShell;
 
 use crate::launcher::{Launcher, RankedApp};
 
 const RESULT_LIMIT: usize = 9;
-const WINDOW_WIDTH: i32 = 760;
+const WINDOW_WIDTH: i32 = 580;
 const WINDOW_HEIGHT_COLLAPSED: i32 = 84;
-const WINDOW_HEIGHT_EXPANDED: i32 = 360;
+const WINDOW_HEIGHT_MAX: i32 = 320;
+const ROW_HEIGHT_ESTIMATE: i32 = 34;
+const RESULTS_CHROME_HEIGHT: i32 = 24;
 
 #[derive(Default)]
 struct UiState {
@@ -42,8 +48,8 @@ fn build_ui(app: &gtk::Application, launcher: Launcher) {
         .decorated(false)
         .build();
     window.add_css_class("seekx-window");
-    window.set_modal(true);
     window.set_hide_on_close(true);
+    setup_layer_shell(&window);
 
     let container = gtk::Box::new(gtk::Orientation::Vertical, 10);
     container.add_css_class("seekx-root");
@@ -155,6 +161,60 @@ fn build_ui(app: &gtk::Application, launcher: Launcher) {
     entry.grab_focus();
 }
 
+#[cfg(feature = "layer-shell")]
+fn setup_layer_shell(window: &gtk::ApplicationWindow) {
+    if !layer_shell::is_supported() {
+        return;
+    }
+
+    window.init_layer_shell();
+    window.set_layer(layer_shell::Layer::Overlay);
+    window.set_keyboard_mode(layer_shell::KeyboardMode::Exclusive);
+    window.set_namespace("seekx");
+    center_layer_shell(window, WINDOW_HEIGHT_COLLAPSED);
+}
+
+#[cfg(not(feature = "layer-shell"))]
+fn setup_layer_shell(_window: &gtk::ApplicationWindow) {}
+
+#[cfg(feature = "layer-shell")]
+fn center_layer_shell(window: &gtk::ApplicationWindow, _height: i32) {
+    let display = match gdk::Display::default() {
+        Some(display) => display,
+        None => return,
+    };
+
+    let monitor_from_surface = window
+        .surface()
+        .and_then(|surface| display.monitor_at_surface(&surface));
+
+    let monitor = monitor_from_surface.or_else(|| {
+        let monitors = display.monitors();
+        monitors
+            .item(0)
+            .and_then(|obj| obj.downcast::<gdk::Monitor>().ok())
+    });
+
+    let Some(monitor) = monitor else {
+        return;
+    };
+
+    let geometry = monitor.geometry();
+    let left = ((geometry.width() - WINDOW_WIDTH) / 2).max(0);
+    let top = ((geometry.height() - WINDOW_HEIGHT_COLLAPSED) / 2).max(0);
+
+    window.set_anchor(layer_shell::Edge::Left, true);
+    window.set_anchor(layer_shell::Edge::Right, false);
+    window.set_anchor(layer_shell::Edge::Top, true);
+    window.set_anchor(layer_shell::Edge::Bottom, false);
+    window.set_margin(layer_shell::Edge::Left, left);
+    window.set_margin(layer_shell::Edge::Top, top);
+}
+
+#[cfg(not(feature = "layer-shell"))]
+#[allow(dead_code)]
+fn center_layer_shell(_window: &gtk::ApplicationWindow, _height: i32) {}
+
 fn trigger_primary_action(
     launcher: &Launcher,
     state: &Rc<RefCell<UiState>>,
@@ -222,9 +282,14 @@ fn refresh_results(
     let has_results = !results.is_empty();
     scroller.set_visible(has_results);
     if has_results {
-        window.set_default_size(WINDOW_WIDTH, WINDOW_HEIGHT_EXPANDED);
+        let results_extra = (results.len() as i32 * ROW_HEIGHT_ESTIMATE + RESULTS_CHROME_HEIGHT)
+            .min(WINDOW_HEIGHT_MAX - WINDOW_HEIGHT_COLLAPSED);
+        let target_height = WINDOW_HEIGHT_COLLAPSED + results_extra;
+        window.set_default_size(WINDOW_WIDTH, target_height);
+        center_layer_shell(window, target_height);
     } else {
         window.set_default_size(WINDOW_WIDTH, WINDOW_HEIGHT_COLLAPSED);
+        center_layer_shell(window, WINDOW_HEIGHT_COLLAPSED);
     }
 
     state.borrow_mut().results = results;
@@ -268,6 +333,14 @@ window.seekx-window > * {
   background: #000000;
 }
 
+*,
+*:focus,
+*:focus-visible,
+*:selected {
+  outline: none;
+  box-shadow: none;
+}
+
 .seekx-root {
   background: #000000;
   border: 0.5px solid #ffffff;
@@ -292,6 +365,18 @@ entry.seekx-entry {
 }
 
 entry.seekx-entry:focus {
+  outline: none;
+  box-shadow: none;
+  border: none;
+}
+
+entry.seekx-entry:focus-visible,
+row.seekx-row:focus,
+row.seekx-row:focus-visible,
+list.seekx-list:focus,
+list.seekx-list:focus-visible,
+scrolledwindow.seekx-scroll:focus,
+scrolledwindow.seekx-scroll:focus-visible {
   outline: none;
   box-shadow: none;
   border: none;

@@ -268,6 +268,7 @@ dependencies = [
  "gdk-pixbuf",
  "gdk4-sys",
  "gio",
+ "gl",
  "glib",
  "libc",
  "pango",
@@ -330,6 +331,26 @@ dependencies = [
  "libc",
  "system-deps",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "gl"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a94edab108827d67608095e269cf862e60d920f144a5026d3dbcfd8b877fb404"
+dependencies = [
+ "gl_generator",
+]
+
+[[package]]
+name = "gl_generator"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a95dfc23a2b4a9a2f5ab41d194f8bfda3cabec42af4e39f08c339eb2a0c124d"
+dependencies = [
+ "khronos_api",
+ "log",
+ "xml-rs",
 ]
 
 [[package]]
@@ -461,6 +482,34 @@ dependencies = [
  "gtk4-sys",
  "libc",
  "pango",
+]
+
+[[package]]
+name = "gtk4-layer-shell"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ceda37a26d7208eb17263cebb67b6c588e240d49468bd105c53a9e78c0a6b6ba"
+dependencies = [
+ "bitflags",
+ "gdk4",
+ "glib",
+ "glib-sys",
+ "gtk4",
+ "gtk4-layer-shell-sys",
+ "libc",
+]
+
+[[package]]
+name = "gtk4-layer-shell-sys"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67c95b6abed0aaec52b6a8de2896464d07b12241939ce1bde31d8d4c1a8c4e28"
+dependencies = [
+ "gdk4-sys",
+ "glib-sys",
+ "gtk4-sys",
+ "libc",
+ "system-deps",
 ]
 
 [[package]]
@@ -676,6 +725,12 @@ dependencies = [
  "once_cell",
  "wasm-bindgen",
 ]
+
+[[package]]
+name = "khronos_api"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 
 [[package]]
 name = "libc"
@@ -900,6 +955,7 @@ version = "0.1.0"
 dependencies = [
  "dirs",
  "gtk4",
+ "gtk4-layer-shell",
  "shlex",
  "urlencoding",
  "walkdir",
@@ -1398,6 +1454,12 @@ name = "writeable"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9edde0db4769d2dc68579893f2306b26c6ecfbe0ef499b013d731b7b9247e0b9"
+
+[[package]]
+name = "xml-rs"
+version = "0.8.28"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ae8337f8a065cfc972643663ea4279e04e7256de865aa66fe25cec5fb912d3f"
 
 [[package]]
 name = "yoke"
