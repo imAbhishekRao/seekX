@@ -6,7 +6,7 @@
 # Arch Linux
 sudo pacman -S --needed rust cargo gtk4 gtk4-layer-shell
 
-git clone <your-github-repo-url> seekX
+git clone https://github.com/aman7935/seekX.git seekX
 cd seekX
 cargo run --features layer-shell
 ```
