@@ -49,7 +49,6 @@ pub fn load_installed_apps() -> Vec<DesktopApp> {
         }
     }
 
-    add_path_programs(&mut apps, &mut seen);
 
     apps.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     apps
@@ -104,53 +103,6 @@ fn app_dirs() -> Vec<PathBuf> {
     out
 }
 
-fn add_path_programs(apps: &mut Vec<DesktopApp>, seen: &mut HashSet<String>) {
-    let Some(path_var) = std::env::var_os("PATH") else {
-        return;
-    };
-
-    for dir in std::env::split_paths(&path_var) {
-        let Ok(entries) = fs::read_dir(dir) else {
-            continue;
-        };
-
-        for entry in entries.filter_map(Result::ok) {
-            let path = entry.path();
-            let Ok(meta) = entry.metadata() else {
-                continue;
-            };
-            if !meta.is_file() {
-                continue;
-            }
-
-            if meta.permissions().mode() & 0o111 == 0 {
-                continue;
-            }
-
-            let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
-                continue;
-            };
-            if name.is_empty() {
-                continue;
-            }
-
-            let dedupe_key = format!("{}:{}", name.to_lowercase(), name.to_lowercase());
-            if !seen.insert(dedupe_key) {
-                continue;
-            }
-
-            apps.push(DesktopApp {
-                name: name.to_string(),
-                exec: name.to_string(),
-                icon: None,
-                comment: Some("Command from PATH".to_string()),
-                search_text: name.to_lowercase(),
-                search_terms: vec![name.to_lowercase()],
-                normalized_terms: vec![compact_alnum(name)],
-            });
-        }
-    }
-}
 
 fn parse_desktop_file(path: &Path) -> Option<DesktopApp> {
     let contents = fs::read_to_string(path).ok()?;

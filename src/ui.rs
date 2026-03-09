@@ -282,10 +282,31 @@ fn refresh_results(
     for result in &results {
         let row = gtk::ListBoxRow::new();
         row.add_css_class("seekx-row");
+
+        let container_box = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+        container_box.set_margin_start(4);
+        container_box.set_margin_end(4);
+
+        if let Some(icon_name) = &result.app.icon {
+            let image = gtk::Image::builder()
+                .icon_name(icon_name)
+                .pixel_size(32)
+                .build();
+            container_box.append(&image);
+        } else {
+            // Fallback to a generic icon if none is provided
+            let image = gtk::Image::builder()
+                .icon_name("application-x-executable")
+                .pixel_size(32)
+                .build();
+            container_box.append(&image);
+        }
         let label = gtk::Label::new(Some(&result.app.name));
+
         label.set_xalign(0.0);
         label.add_css_class("seekx-label");
-        row.set_child(Some(&label));
+        container_box.append(&label);
+        row.set_child(Some(&container_box));
         list.append(&row);
     }
 
@@ -397,10 +418,10 @@ list.seekx-list {
 row.seekx-row {
   background: transparent;
   border: none;
-  border-radius: 0;
-  margin-top: 4px;
-  margin-bottom: 4px;
-  padding: 0;
+  border-radius: 5px;
+  margin-top: 2px;
+  margin-bottom: 2px;
+  padding: 8px;
 }
 
 row.seekx-row:selected {
