@@ -1,6 +1,6 @@
 # seekX
 
-`seekX` is a Rust-based Linux app launcher inspired by Walker/fuzzel flow, with GTK4 UI and optional Wayland layer-shell mode.
+`seekX` is a Rust-based Linux app launcher.
 
 ## Features
 
