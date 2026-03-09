@@ -24,5 +24,25 @@ pub fn score(query: &str, haystack: &str) -> Option<MatchScore> {
         });
     }
 
+    // Compact normalization helps match queries like "local send" to "LocalSend"
+    // without re-introducing very loose fuzzy matching.
+    let q_compact = compact_alnum(&q);
+    let h_compact = compact_alnum(&h);
+    if !q_compact.is_empty() {
+        if let Some(idx) = h_compact.find(&q_compact) {
+            let positional_bonus = 700_i64.saturating_sub(idx as i64 * 3);
+            let length_bonus =
+                250_i64.saturating_sub((h_compact.len() as i64 - q_compact.len() as i64).max(0));
+            return Some(MatchScore {
+                score: 8_000 + positional_bonus + length_bonus,
+                start_idx: idx,
+            });
+        }
+    }
+
     None
+}
+
+fn compact_alnum(input: &str) -> String {
+    input.chars().filter(|c| c.is_ascii_alphanumeric()).collect()
 }

@@ -55,6 +55,7 @@ fn app_dirs() -> Vec<PathBuf> {
         PathBuf::from("/usr/share/applications"),
         PathBuf::from("/usr/local/share/applications"),
         PathBuf::from("/var/lib/flatpak/exports/share/applications"),
+        PathBuf::from("/var/lib/snapd/desktop/applications"),
     ];
 
     if let Some(home) = dirs::home_dir() {
