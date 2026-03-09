@@ -1,5 +1,4 @@
 use std::cell::RefCell;
-use std::path::Path;
 use std::rc::Rc;
 
 use gtk::gdk;
@@ -14,10 +13,8 @@ use crate::launcher::{Launcher, RankedApp};
 
 const RESULT_LIMIT: usize = 9;
 const WINDOW_WIDTH: i32 = 580;
-const WINDOW_HEIGHT_COLLAPSED: i32 = 84;
-const WINDOW_HEIGHT_MAX: i32 = 320;
-const ROW_HEIGHT_ESTIMATE: i32 = 34;
-const RESULTS_CHROME_HEIGHT: i32 = 24;
+const WINDOW_HEIGHT: i32 = 260;
+const RESULTS_AREA_HEIGHT: i32 = 170;
 
 #[derive(Default)]
 struct UiState {
@@ -43,7 +40,7 @@ fn build_ui(app: &gtk::Application, launcher: Launcher) {
         .application(app)
         .title("seekX")
         .default_width(WINDOW_WIDTH)
-        .default_height(WINDOW_HEIGHT_COLLAPSED)
+        .default_height(WINDOW_HEIGHT)
         .resizable(false)
         .decorated(false)
         .build();
@@ -60,6 +57,10 @@ fn build_ui(app: &gtk::Application, launcher: Launcher) {
         .build();
     entry.add_css_class("seekx-entry");
 
+    let status = gtk::Label::new(Some("Matches: 0"));
+    status.set_xalign(0.0);
+    status.add_css_class("seekx-status");
+
     let list = gtk::ListBox::new();
     list.add_css_class("seekx-list");
     list.set_selection_mode(gtk::SelectionMode::Single);
@@ -72,10 +73,13 @@ fn build_ui(app: &gtk::Application, launcher: Launcher) {
         .child(&list)
         .build();
     scroller.set_has_frame(false);
-    scroller.set_visible(false);
+    scroller.set_visible(true);
+    scroller.set_min_content_height(RESULTS_AREA_HEIGHT);
+    scroller.set_max_content_height(RESULTS_AREA_HEIGHT);
     scroller.add_css_class("seekx-scroll");
 
     container.append(&entry);
+    container.append(&status);
     container.append(&scroller);
     window.set_child(Some(&container));
 
@@ -87,8 +91,19 @@ fn build_ui(app: &gtk::Application, launcher: Launcher) {
         let list = list.clone();
         let scroller = scroller.clone();
         let window = window.clone();
+        let container = container.clone();
+        let status = status.clone();
         entry.connect_changed(move |entry| {
-            refresh_results(&launcher, entry, &list, &scroller, &window, &state);
+            refresh_results(
+                &launcher,
+                entry,
+                &list,
+                &scroller,
+                &status,
+                &container,
+                &window,
+                &state,
+            );
         });
     }
 
@@ -156,7 +171,16 @@ fn build_ui(app: &gtk::Application, launcher: Launcher) {
     }
     window.add_controller(key_controller);
 
-    refresh_results(&launcher, &entry, &list, &scroller, &window, &state);
+    refresh_results(
+        &launcher,
+        &entry,
+        &list,
+        &scroller,
+        &status,
+        &container,
+        &window,
+        &state,
+    );
     window.present();
     entry.grab_focus();
 }
@@ -171,7 +195,7 @@ fn setup_layer_shell(window: &gtk::ApplicationWindow) {
     window.set_layer(layer_shell::Layer::Overlay);
     window.set_keyboard_mode(layer_shell::KeyboardMode::Exclusive);
     window.set_namespace("seekx");
-    center_layer_shell(window, WINDOW_HEIGHT_COLLAPSED);
+    center_layer_shell(window, WINDOW_HEIGHT);
 }
 
 #[cfg(not(feature = "layer-shell"))]
@@ -201,7 +225,7 @@ fn center_layer_shell(window: &gtk::ApplicationWindow, _height: i32) {
 
     let geometry = monitor.geometry();
     let left = ((geometry.width() - WINDOW_WIDTH) / 2).max(0);
-    let top = ((geometry.height() - WINDOW_HEIGHT_COLLAPSED) / 2).max(0);
+    let top = ((geometry.height() - WINDOW_HEIGHT) / 2).max(0);
 
     window.set_anchor(layer_shell::Edge::Left, true);
     window.set_anchor(layer_shell::Edge::Right, false);
@@ -242,16 +266,14 @@ fn refresh_results(
     entry: &gtk::Entry,
     list: &gtk::ListBox,
     scroller: &gtk::ScrolledWindow,
+    status: &gtk::Label,
+    container: &gtk::Box,
     window: &gtk::ApplicationWindow,
     state: &Rc<RefCell<UiState>>,
 ) {
     let query = entry.text().to_string();
     let trimmed = query.trim();
-    let results = if trimmed.is_empty() {
-        Vec::new()
-    } else {
-        launcher.rank(trimmed, RESULT_LIMIT)
-    };
+    let results = launcher.rank(trimmed, RESULT_LIMIT);
 
     while let Some(child) = list.first_child() {
         list.remove(&child);
@@ -260,55 +282,32 @@ fn refresh_results(
     for result in &results {
         let row = gtk::ListBoxRow::new();
         row.add_css_class("seekx-row");
-
-        let row_box = gtk::Box::new(gtk::Orientation::Horizontal, 10);
-        let icon = app_icon_widget(result.app.icon.as_deref());
-        row_box.append(&icon);
-
         let label = gtk::Label::new(Some(&result.app.name));
         label.set_xalign(0.0);
-        label.set_hexpand(true);
         label.add_css_class("seekx-label");
-        row_box.append(&label);
-
-        row.set_child(Some(&row_box));
+        row.set_child(Some(&label));
         list.append(&row);
     }
+
+    status.set_text(&format!(
+        "Installed: {} | Matches: {}",
+        launcher.app_count(),
+        results.len()
+    ));
 
     if let Some(row) = list.row_at_index(0) {
         list.select_row(Some(&row));
     }
 
     let has_results = !results.is_empty();
-    scroller.set_visible(has_results);
-    if has_results {
-        let results_extra = (results.len() as i32 * ROW_HEIGHT_ESTIMATE + RESULTS_CHROME_HEIGHT)
-            .min(WINDOW_HEIGHT_MAX - WINDOW_HEIGHT_COLLAPSED);
-        let target_height = WINDOW_HEIGHT_COLLAPSED + results_extra;
-        window.set_default_size(WINDOW_WIDTH, target_height);
-        center_layer_shell(window, target_height);
-    } else {
-        window.set_default_size(WINDOW_WIDTH, WINDOW_HEIGHT_COLLAPSED);
-        center_layer_shell(window, WINDOW_HEIGHT_COLLAPSED);
-    }
+    scroller.set_visible(has_results || !trimmed.is_empty());
+    container.set_size_request(-1, WINDOW_HEIGHT - 24);
+    window.set_default_size(WINDOW_WIDTH, WINDOW_HEIGHT);
+    window.set_size_request(WINDOW_WIDTH, WINDOW_HEIGHT);
+    center_layer_shell(window, WINDOW_HEIGHT);
+    window.present();
 
     state.borrow_mut().results = results;
-}
-
-fn app_icon_widget(icon: Option<&str>) -> gtk::Image {
-    let image = if let Some(icon_name) = icon {
-        if Path::new(icon_name).is_absolute() && Path::new(icon_name).exists() {
-            gtk::Image::from_file(icon_name)
-        } else {
-            gtk::Image::from_icon_name(icon_name)
-        }
-    } else {
-        gtk::Image::from_icon_name("application-x-executable")
-    };
-
-    image.set_pixel_size(20);
-    image.add_css_class("seekx-icon");
-    image
 }
 
 fn move_selection(list: &gtk::ListBox, state: &Rc<RefCell<UiState>>, delta: i32) {
@@ -414,8 +413,9 @@ label.seekx-label {
   font-size: 15px;
 }
 
-image.seekx-icon {
+label.seekx-status {
   color: #ffffff;
+  font-size: 12px;
 }
 ",
     );

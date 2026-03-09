@@ -50,7 +50,7 @@ impl Launcher {
             .apps
             .iter()
             .filter_map(|app| {
-                let score = search::score(q, &app.search_text)?;
+                let score = search::score(q, &app.search_terms, &app.normalized_terms)?;
                 Some(RankedApp {
                     app: app.clone(),
                     score: score.score,

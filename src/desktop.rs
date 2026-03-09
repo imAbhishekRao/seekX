@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 use walkdir::WalkDir;
@@ -11,6 +12,8 @@ pub struct DesktopApp {
     pub icon: Option<String>,
     pub comment: Option<String>,
     pub search_text: String,
+    pub search_terms: Vec<String>,
+    pub normalized_terms: Vec<String>,
 }
 
 pub fn load_installed_apps() -> Vec<DesktopApp> {
@@ -28,7 +31,7 @@ pub fn load_installed_apps() -> Vec<DesktopApp> {
             .into_iter()
             .filter_map(Result::ok)
         {
-            if !entry.file_type().is_file() {
+            if !entry.file_type().is_file() && !entry.file_type().is_symlink() {
                 continue;
             }
             if entry.path().extension().and_then(|e| e.to_str()) != Some("desktop") {
@@ -46,24 +49,107 @@ pub fn load_installed_apps() -> Vec<DesktopApp> {
         }
     }
 
+    add_path_programs(&mut apps, &mut seen);
+
     apps.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     apps
 }
 
 fn app_dirs() -> Vec<PathBuf> {
-    let mut dirs = vec![
-        PathBuf::from("/usr/share/applications"),
-        PathBuf::from("/usr/local/share/applications"),
-        PathBuf::from("/var/lib/flatpak/exports/share/applications"),
-        PathBuf::from("/var/lib/snapd/desktop/applications"),
-    ];
+    let mut out = Vec::<PathBuf>::new();
+    let mut seen = HashSet::<PathBuf>::new();
 
     if let Some(home) = dirs::home_dir() {
-        dirs.push(home.join(".local/share/applications"));
-        dirs.push(home.join(".local/share/flatpak/exports/share/applications"));
+        for path in [
+            home.join(".local/share/applications"),
+            PathBuf::from("/usr/local/share/applications"),
+            PathBuf::from("/usr/share/applications"),
+            PathBuf::from("/var/lib/flatpak/exports/share/applications"),
+            home.join(".local/share/flatpak/exports/share/applications"),
+            PathBuf::from("/var/lib/snapd/desktop/applications"),
+        ] {
+            if seen.insert(path.clone()) {
+                out.push(path);
+            }
+        }
+    } else {
+        for path in [
+            PathBuf::from("/usr/local/share/applications"),
+            PathBuf::from("/usr/share/applications"),
+            PathBuf::from("/var/lib/flatpak/exports/share/applications"),
+            PathBuf::from("/var/lib/snapd/desktop/applications"),
+        ] {
+            if seen.insert(path.clone()) {
+                out.push(path);
+            }
+        }
     }
 
-    dirs
+    // Include XDG dirs as extras, but don't rely on them.
+    if let Some(data_home) = std::env::var_os("XDG_DATA_HOME").filter(|v| !v.is_empty()) {
+        let path = PathBuf::from(data_home).join("applications");
+        if seen.insert(path.clone()) {
+            out.push(path);
+        }
+    }
+    if let Some(data_dirs) = std::env::var_os("XDG_DATA_DIRS").filter(|v| !v.is_empty()) {
+        for base in std::env::split_paths(&data_dirs) {
+            let path = base.join("applications");
+            if seen.insert(path.clone()) {
+                out.push(path);
+            }
+        }
+    }
+
+    out
+}
+
+fn add_path_programs(apps: &mut Vec<DesktopApp>, seen: &mut HashSet<String>) {
+    let Some(path_var) = std::env::var_os("PATH") else {
+        return;
+    };
+
+    for dir in std::env::split_paths(&path_var) {
+        let Ok(entries) = fs::read_dir(dir) else {
+            continue;
+        };
+
+        for entry in entries.filter_map(Result::ok) {
+            let path = entry.path();
+            let Ok(meta) = entry.metadata() else {
+                continue;
+            };
+            if !meta.is_file() {
+                continue;
+            }
+
+            if meta.permissions().mode() & 0o111 == 0 {
+                continue;
+            }
+
+            let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+                continue;
+            };
+            if name.is_empty() {
+                continue;
+            }
+
+            let dedupe_key = format!("{}:{}", name.to_lowercase(), name.to_lowercase());
+            if !seen.insert(dedupe_key) {
+                continue;
+            }
+
+            apps.push(DesktopApp {
+                name: name.to_string(),
+                exec: name.to_string(),
+                icon: None,
+                comment: Some("Command from PATH".to_string()),
+                search_text: name.to_lowercase(),
+                search_terms: vec![name.to_lowercase()],
+                normalized_terms: vec![compact_alnum(name)],
+            });
+        }
+    }
 }
 
 fn parse_desktop_file(path: &Path) -> Option<DesktopApp> {
@@ -104,23 +190,71 @@ fn parse_desktop_file(path: &Path) -> Option<DesktopApp> {
         .get("Comment")
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty());
+    let generic_name = section
+        .get("GenericName")
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
     let icon = section
         .get("Icon")
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty());
+    let wm_class = section
+        .get("StartupWMClass")
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
 
-    let mut search_parts = vec![name.clone(), exec.clone()];
+    let mut search_parts = vec![name.clone()];
+    if let Some(generic_name) = &generic_name {
+        search_parts.push(generic_name.clone());
+    }
+    search_parts.push(exec.clone());
+    if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+        if !stem.is_empty() {
+            search_parts.push(stem.to_string());
+        }
+    }
+    if let Some(wm_class) = &wm_class {
+        search_parts.push(wm_class.clone());
+    }
     if let Some(comment) = &comment {
         search_parts.push(comment.clone());
     }
     if let Some(categories) = section.get("Categories") {
-        search_parts.push(categories.clone());
+        search_parts.extend(
+            categories
+                .split(';')
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+                .map(str::to_string),
+        );
     }
     if let Some(keywords) = section.get("Keywords") {
-        search_parts.push(keywords.clone());
+        search_parts.extend(
+            keywords
+                .split(';')
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+                .map(str::to_string),
+        );
     }
 
-    let search_text = search_parts.join(" ").to_lowercase();
+    let mut normalized_parts = Vec::new();
+    for term in &search_parts {
+        let compact = compact_alnum(term);
+        if !compact.is_empty() {
+            normalized_parts.push(compact);
+        }
+    }
+
+    let search_text = format!(
+        "{} {}",
+        search_parts.join(" ").to_lowercase(),
+        normalized_parts.join(" ")
+    );
+    let search_terms = search_parts
+        .iter()
+        .map(|v| v.to_lowercase())
+        .collect::<Vec<_>>();
 
     Some(DesktopApp {
         name,
@@ -128,7 +262,13 @@ fn parse_desktop_file(path: &Path) -> Option<DesktopApp> {
         icon,
         comment,
         search_text,
+        search_terms,
+        normalized_terms: normalized_parts,
     })
+}
+
+fn compact_alnum(input: &str) -> String {
+    input.chars().filter(|c| c.is_ascii_alphanumeric()).collect()
 }
 
 fn parse_desktop_entry_section(contents: &str) -> Option<HashMap<String, String>> {
