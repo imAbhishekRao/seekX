@@ -77,6 +77,7 @@ fn build_ui(app: &gtk::Application, launcher: Launcher) {
 
     let scroller = gtk::ScrolledWindow::builder()
         .hscrollbar_policy(gtk::PolicyType::Never)
+        .vscrollbar_policy(gtk::PolicyType::Never)
         .vexpand(true)
         .hexpand(true)
         .child(&list)
