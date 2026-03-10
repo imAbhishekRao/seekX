@@ -384,6 +384,12 @@ let results: Vec<ResultItem> = if trimmed.starts_with("//") {
                         .pixel_size(32)
                         .build();
                     container_box.append(&image);
+                } else {
+                    let image = gtk::Image::builder()
+                        .icon_name("application-x-executable")
+                        .pixel_size(32)
+                        .build();
+                    container_box.append(&image);
                 }
 
                 let label = gtk::Label::new(Some(&app.app.name));
@@ -531,13 +537,15 @@ window.seekx-window > * {
 }
 
 .seekx-search-box {
-  background-color: rgba(0, 0, 0, 0.75);
+  background-color: #000000;
+  background-color: rgba(0, 0, 0, 0.9);
   border: 1px solid #ffffff;
   border-radius: 14px;
   padding: 10px 18px;
 }
 
 .seekx-results-box {
+  background-color: #000000;
   background-color: rgba(0, 0, 0, 0.75);
   border: 1px solid #ffffff;
   border-radius: 14px;
