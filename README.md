@@ -1,57 +1,31 @@
 # seekX
 
+## Apps and Web Search
+
+seekX can search your installed apps as well as the web. App results update as you type, and queries that look like URLs or when you invoke the web search action open in whatever browser the system reports as the default.
+
+## Prerequisites
+
+Ensure you have Rust/Cargo plus the GTK4 development stack (`libgtk-4-dev`/`gtk4-devel`, `pkg-config`, `glib`, etc.). If you plan to enable the layer shell integration, install `gtk4-layer-shell` (or the distro’s `-dev` package) before building.
+
+On Debian/Ubuntu:
+```
+sudo apt install build-essential pkg-config libgtk-4-dev libglib2.0-dev
+```
+On Fedora:
+```
+sudo dnf install gcc-c++ pkgconf-pkg-config gtk4-devel
+```
+On Arch Linux:
+```
+sudo pacman -S --needed rust cargo gtk4 gtk4-layer-shell
+```
+
 ## Clone and run
 
 ```bash
-# Arch Linux
-sudo pacman -S --needed rust cargo gtk4 gtk4-layer-shell
-
 git clone https://github.com/aman7935/seekX.git seekX
 cd seekX
-cargo run --features layer-shell
-```
-
-## Web search (no hardcoded engine)
-
-seekX opens links in your system default browser. By default, web searches use DuckDuckGo. To use a different engine, set a search URL template via an env var:
-
-```bash
-# examples:
-export SEEKX_SEARCH_URL_TEMPLATE='https://www.google.com/search?q={query}'
-export SEEKX_SEARCH_URL_TEMPLATE='https://duckduckgo.com/?q={query}'
-export SEEKX_SEARCH_URL_TEMPLATE='https://search.brave.com/search?q={query}'
-```
-
-The template can use `{query}` or `%s` as the placeholder (it will be URL-encoded).
-
-## Add to Applications menu and terminal
-
-Build once:
-
-```bash
-cd seekX
 cargo build --release --features layer-shell
-```
-
-Create desktop entry:
-
-```bash
-mkdir -p ~/.local/share/applications
-cat > ~/.local/share/applications/seekx.desktop << 'EOF'
-[Desktop Entry]
-Type=Application
-Name=SeekX
-Exec=/home/your-user/seekX/target/release/seekX
-Terminal=false
-Categories=Utility;
-EOF
-```
-
-Replace `your-user` with your Linux username.
-
-To run from terminal as `seekX`:
-
-```bash
-mkdir -p ~/.local/bin
-ln -sf /home/$USER/seekX/target/release/seekX ~/.local/bin/seekX
+./target/release/seekX
 ```
