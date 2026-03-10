@@ -310,7 +310,7 @@ fn refresh_results(
     }
 
     // Animate the results box in/out
-    let show = !trimmed.is_empty();
+    let show = !trimmed.is_empty() && !results.is_empty();
     revealer.set_reveal_child(show);
 
     state.borrow_mut().results = results;
