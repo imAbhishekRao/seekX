@@ -4,10 +4,17 @@ pub struct MatchScore {
     pub start_idx: usize,
 }
 
-pub fn score(query: &str, search_terms: &[String], normalized_terms: &[String]) -> Option<MatchScore> {
+pub fn score(
+    query: &str,
+    search_terms: &[String],
+    normalized_terms: &[String],
+) -> Option<MatchScore> {
     let q = query.trim().to_lowercase();
     if q.is_empty() {
-        return Some(MatchScore { score: 1, start_idx: 0 });
+        return Some(MatchScore {
+            score: 1,
+            start_idx: 0,
+        });
     }
 
     let normalized_query = compact_alnum(&q);
@@ -59,7 +66,10 @@ pub fn score(query: &str, search_terms: &[String], normalized_terms: &[String]) 
 }
 
 fn compact_alnum(input: &str) -> String {
-    input.chars().filter(|c| c.is_ascii_alphanumeric()).collect()
+    input
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .collect()
 }
 
 fn is_subsequence(needle: &str, haystack: &str) -> bool {

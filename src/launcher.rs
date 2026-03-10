@@ -1,10 +1,10 @@
+use crate::desktop::DesktopApp;
+use crate::search;
+use crate::ui::ResultItem;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use walkdir::WalkDir;
-use crate::desktop::DesktopApp;
-use crate::search;
-use crate::ui::ResultItem;
 
 const FIELD_CODES: [&str; 14] = [
     "%f", "%F", "%u", "%U", "%d", "%D", "%n", "%N", "%i", "%c", "%k", "%v", "%m", "%",
@@ -26,18 +26,10 @@ pub struct RankedApp {
     pub match_idx: usize,
 }
 
-
 fn index_home_files() -> Vec<(String, String)> {
     let home = std::env::var("HOME").unwrap_or_default();
 
-    let ignored = [
-        "node_modules",
-        "target",
-        ".cache",
-        ".git",
-        ".local",
-        ".npm",
-    ];
+    let ignored = ["node_modules", "target", ".cache", ".git", ".local", ".npm"];
 
     let mut files = Vec::new();
 
@@ -67,42 +59,36 @@ fn index_home_files() -> Vec<(String, String)> {
 }
 
 impl Launcher {
-pub fn new(apps: Vec<DesktopApp>) -> Self {
-    let files = index_home_files();
+    pub fn new(apps: Vec<DesktopApp>) -> Self {
+        let files = index_home_files();
 
-    Self {
-        apps,
-        files,
+        Self { apps, files }
     }
-}
 
     pub fn app_count(&self) -> usize {
         self.apps.len()
     }
 
+    pub fn rank_files(&self, query: &str, limit: usize) -> Vec<ResultItem> {
+        let search = query.trim_start_matches("//").to_lowercase();
 
+        let mut results = Vec::new();
 
+        for (name, path) in &self.files {
+            if name.to_lowercase().contains(&search) {
+                results.push(ResultItem::File {
+                    name: name.clone(),
+                    path: path.clone(),
+                });
 
-pub fn rank_files(&self, query: &str, limit: usize) -> Vec<ResultItem> {
-    let search = query.trim_start_matches("//").to_lowercase();
-
-    let mut results = Vec::new();
-
-    for (name, path) in &self.files {
-        if name.to_lowercase().contains(&search) {
-            results.push(ResultItem::File {
-                name: name.clone(),
-                path: path.clone(),
-            });
-
-            if results.len() >= limit {
-                break;
+                if results.len() >= limit {
+                    break;
+                }
             }
         }
-    }
 
-    results
-}
+        results
+    }
 
     pub fn rank_folders(&self, query: &str, limit: usize) -> Vec<ResultItem> {
         let home = std::env::var("HOME").unwrap_or_default();
@@ -195,25 +181,20 @@ pub fn rank_files(&self, query: &str, limit: usize) -> Vec<ResultItem> {
             .spawn();
     }
 
-pub fn web_search(&self, query: &str) -> bool {
-    let q = query.trim();
-    if q.is_empty() {
-        return false;
+    pub fn web_search(&self, query: &str) -> bool {
+        let q = query.trim();
+        if q.is_empty() {
+            return false;
+        }
+
+        let url = if looks_like_url(q) {
+            normalize_url(q)
+        } else {
+            build_search_url(q)
+        };
+
+        webbrowser::open(&url).is_ok()
     }
-
-    let url = if looks_like_url(q) {
-        normalize_url(q)
-    } else {
-        build_search_url(q)
-    };
-
-    if open_in_default_browser_new_window(&url) {
-        focus_browser_window();
-        return true;
-    }
-
-    false
-}
 }
 
 fn try_spawn(command: &str, args: &[&str]) -> bool {
@@ -240,39 +221,6 @@ fn parse_exec(exec_line: &str) -> Vec<String> {
         .into_iter()
         .filter(|part| !FIELD_CODES.contains(&part.as_str()) && !part.starts_with('%'))
         .collect()
-}
-
-fn open_in_default_browser_new_window(url: &str) -> bool {
-    let output = Command::new("xdg-settings")
-        .args(["get", "default-web-browser"])
-        .output();
-
-    if let Ok(output) = output {
-        let browser = String::from_utf8_lossy(&output.stdout)
-            .trim()
-            .replace(".desktop", "");
-
-        if !browser.is_empty() {
-            if Command::new(&browser)
-                .args(["--new-window", url])
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .spawn()
-                .is_ok()
-            {
-                return true;
-            }
-        }
-    }
-
-    Command::new("xdg-open")
-        .arg(url)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .is_ok()
 }
 
 fn build_search_url_from_env(query: &str) -> Option<String> {
@@ -336,43 +284,6 @@ fn looks_like_url(input: &str) -> bool {
     // domain.tld[/...]
     lower.contains('.') && !lower.starts_with('.')
 }
-
-
-
-
-fn focus_browser_window() {
-    let output = Command::new("xdg-settings")
-        .args(["get", "default-web-browser"])
-        .output();
-
-    let Ok(output) = output else { return };
-
-    let browser = String::from_utf8_lossy(&output.stdout)
-        .trim()
-        .replace(".desktop", "");
-
-    if browser.is_empty() {
-        return;
-    }
-
-    let _ = Command::new("niri")
-        .args([
-            "msg",
-            "action",
-            "focus-window",
-            "--app-id",
-            &browser,
-        ])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn();
-}
-
-
-
-
-
 
 fn normalize_url(input: &str) -> String {
     let trimmed = input.trim();

@@ -13,14 +13,9 @@ use crate::launcher::{Launcher, RankedApp};
 #[derive(Clone)]
 pub enum ResultItem {
     App(RankedApp),
-    Folder {
-        name: String,
-        path: String,
-    },
-    File {
-        name: String,
-        path: String,
-    },
+    Folder { name: String, path: String },
+    File { name: String, path: String },
+    WebSearch { query: String },
 }
 
 const RESULT_LIMIT: usize = 9;
@@ -134,23 +129,26 @@ fn build_ui(app: &gtk::Application, launcher: Launcher) {
             let idx = row.index().max(0) as usize;
             let selected = state.borrow().results.get(idx).cloned();
             if let Some(item) = selected {
-            match item {
-                ResultItem::App(app) => {
-                    launcher.launch_app(&app.app);
+                match item {
+                    ResultItem::App(app) => {
+                        launcher.launch_app(&app.app);
+                    }
+                    ResultItem::Folder { path, .. } => {
+                        std::process::Command::new("xdg-open")
+                            .arg(path)
+                            .spawn()
+                            .ok();
+                    }
+                    ResultItem::File { path, .. } => {
+                        std::process::Command::new("xdg-open")
+                            .arg(path)
+                            .spawn()
+                            .ok();
+                    }
+                    ResultItem::WebSearch { query } => {
+                        launcher.web_search(&query);
+                    }
                 }
-                ResultItem::Folder { path, .. } => {
-                    std::process::Command::new("xdg-open")
-                        .arg(path)
-                        .spawn()
-                        .ok();
-                }
-                ResultItem::File { path, .. } => {
-                    std::process::Command::new("xdg-open")
-                        .arg(path)
-                        .spawn()
-                        .ok();
-                }
-        }
                 window.close();
             } else if launcher.web_search(entry.text().as_str()) {
                 window.close();
@@ -314,6 +312,9 @@ fn trigger_primary_action(
                         .spawn()
                         .ok();
                 }
+                ResultItem::WebSearch { query } => {
+                    launcher.web_search(&query);
+                }
             }
 
             window.close();
@@ -326,7 +327,6 @@ fn trigger_primary_action(
         window.close();
     }
 }
-
 
 fn refresh_results(
     launcher: &Launcher,
@@ -349,20 +349,23 @@ fn refresh_results(
     // };
     //
 
+    let results: Vec<ResultItem> = if trimmed.starts_with("//") {
+        launcher.rank_files(trimmed, RESULT_LIMIT)
+    } else if trimmed.starts_with("/") {
+        launcher.rank_folders(trimmed, RESULT_LIMIT)
+    } else {
+        let mut apps: Vec<ResultItem> = launcher
+            .rank(trimmed, RESULT_LIMIT.saturating_sub(1))
+            .into_iter()
+            .map(ResultItem::App)
+            .collect();
 
+        apps.push(ResultItem::WebSearch {
+            query: trimmed.to_string(),
+        });
 
-let results: Vec<ResultItem> = if trimmed.starts_with("//") {
-    launcher.rank_files(trimmed, RESULT_LIMIT)
-} else if trimmed.starts_with("/") {
-    launcher.rank_folders(trimmed, RESULT_LIMIT)
-} else {
-    launcher
-        .rank(trimmed, RESULT_LIMIT)
-        .into_iter()
-        .map(ResultItem::App)
-        .collect()
-};
-
+        apps
+    };
 
     while let Some(child) = list.first_child() {
         list.remove(&child);
@@ -457,13 +460,31 @@ let results: Vec<ResultItem> = if trimmed.starts_with("//") {
                 path_label.add_css_class("seekx-path");
                 path_label.set_ellipsize(gtk::pango::EllipsizeMode::Start);
 
-
                 vbox.append(&name_label);
                 vbox.append(&path_label);
 
                 container_box.append(&vbox);
             }
+            ResultItem::WebSearch { query } => {
+                let image = gtk::Image::builder()
+                    .icon_name("applications-internet")
+                    .pixel_size(32)
+                    .build();
 
+                container_box.append(&image);
+
+                let label_text = if query.is_empty() {
+                    "Browse web".to_string()
+                } else {
+                    format!("Search web for '{}'", query)
+                };
+
+                let label = gtk::Label::new(Some(&label_text));
+                label.set_xalign(0.0);
+                label.add_css_class("seekx-label");
+                label.add_css_class("seekx-web-label");
+                container_box.append(&label);
+            }
         }
 
         row.set_child(Some(&container_box));
@@ -652,6 +673,15 @@ label.seekx-path {
 row.seekx-row:selected label.seekx-label {
   color: #ffffff;
   font-weight: 500;
+}
+
+label.seekx-web-label {
+  font-weight: bold;
+  color: #8ab4f8;
+}
+
+row.seekx-row:selected label.seekx-web-label {
+  color: #d2e3fc;
 }
 
 label.seekx-status {
