@@ -134,7 +134,7 @@ fn parse_exec(exec_line: &str) -> Vec<String> {
 }
 
 fn open_in_default_browser(url: &str) -> bool {
-    if webbrowser::open(url).is_ok() {
+    if try_spawn("xdg-open", &[url]) {
         return true;
     }
 
@@ -142,7 +142,7 @@ fn open_in_default_browser(url: &str) -> bool {
         return true;
     }
 
-    if try_spawn("xdg-open", &[url]) {
+    if webbrowser::open(url).is_ok() {
         return true;
     }
 
