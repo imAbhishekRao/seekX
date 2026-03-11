@@ -1,7 +1,9 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, RwLock};
 
+use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use walkdir::WalkDir;
 
 use crate::domain::DesktopApp;
@@ -43,7 +45,7 @@ pub fn load_installed_apps() -> Vec<DesktopApp> {
     apps
 }
 
-fn app_dirs() -> Vec<PathBuf> {
+pub fn app_dirs() -> Vec<PathBuf> {
     let mut out = Vec::<PathBuf>::new();
     let mut seen = HashSet::<PathBuf>::new();
 
@@ -90,6 +92,63 @@ fn app_dirs() -> Vec<PathBuf> {
     }
 
     out
+}
+
+pub fn watch_apps(apps: Arc<RwLock<Vec<DesktopApp>>>) -> notify::Result<()> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut watcher = RecommendedWatcher::new(tx, Config::default())?;
+
+    for dir in app_dirs() {
+        if dir.exists() {
+            let _ = watcher.watch(&dir, RecursiveMode::Recursive);
+        }
+    }
+
+    for res in rx {
+        match res {
+            Ok(event) => handle_app_event(event, &apps),
+            Err(e) => eprintln!("app watch error: {:?}", e),
+        }
+    }
+
+    Ok(())
+}
+
+fn handle_app_event(event: Event, apps: &Arc<RwLock<Vec<DesktopApp>>>) {
+    match event.kind {
+        EventKind::Create(_) | EventKind::Modify(_) => {
+            for path in event.paths {
+                if path.extension().and_then(|e| e.to_str()) == Some("desktop") {
+                    if let Some(app) = parse_desktop_file(&path) {
+                        if let Ok(mut a) = apps.write() {
+                            // Deduplicate by name and exec
+                            let dedupe_key = format!("{}:{}", app.name.to_lowercase(), app.exec.to_lowercase());
+                            
+                            // Remove existing if any (to update)
+                            a.retain(|existing| {
+                                let key = format!("{}:{}", existing.name.to_lowercase(), existing.exec.to_lowercase());
+                                key != dedupe_key
+                            });
+                            
+                            a.push(app);
+                            a.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+                        }
+                    }
+                }
+            }
+        }
+        EventKind::Remove(_) => {
+            // Removing accurately is tricky because we don't have the file anymore to parse it.
+            // We'd need a mapping of path -> app.
+            // For now, let's just trigger a full reload on removal to be safe, 
+            // or we could store the path in DesktopApp.
+            // Let's improve DesktopApp later. For now, full reload is safer and apps are few.
+            if let Ok(mut a) = apps.write() {
+                *a = load_installed_apps();
+            }
+        }
+        _ => {}
+    }
 }
 
 fn parse_desktop_file(path: &Path) -> Option<DesktopApp> {
@@ -222,5 +281,9 @@ fn parse_desktop_entry_section(contents: &str) -> Option<HashMap<String, String>
         map.insert(key.trim().to_string(), value.trim().to_string());
     }
 
-    if map.is_empty() { None } else { Some(map) }
+    if map.is_empty() {
+        None
+    } else {
+        Some(map)
+    }
 }

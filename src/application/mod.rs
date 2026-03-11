@@ -1,12 +1,16 @@
+use std::sync::{Arc, RwLock};
+use std::thread;
+
 use crate::domain::{score, DesktopApp};
 use crate::infrastructure::browser;
+use crate::infrastructure::desktop;
 use crate::infrastructure::fs_index::FileIndex;
 use crate::settings;
 use crate::ui::ResultItem;
 
 #[derive(Clone)]
 pub struct Launcher {
-    apps: Vec<DesktopApp>,
+    apps: Arc<RwLock<Vec<DesktopApp>>>,
     file_index: FileIndex,
     search_template: Option<String>,
 }
@@ -22,6 +26,14 @@ impl Launcher {
     pub fn new(apps: Vec<DesktopApp>) -> Self {
         let file_index = FileIndex::new();
         let search_template = settings::search_template_from_env().ok().flatten();
+        let apps = Arc::new(RwLock::new(apps));
+
+        let l_apps = apps.clone();
+        thread::spawn(move || {
+            if let Err(e) = desktop::watch_apps(l_apps) {
+                eprintln!("App watcher error: {:?}", e);
+            }
+        });
 
         Self {
             apps,
@@ -45,9 +57,14 @@ impl Launcher {
     pub fn rank(&self, query: &str, limit: usize) -> Vec<RankedApp> {
         let q = query.trim();
 
+        let apps_lock = if let Ok(a) = self.apps.read() {
+            a
+        } else {
+            return Vec::new();
+        };
+
         if q.is_empty() {
-            return self
-                .apps
+            return apps_lock
                 .iter()
                 .take(limit)
                 .cloned()
@@ -59,8 +76,7 @@ impl Launcher {
                 .collect();
         }
 
-        let mut ranked: Vec<RankedApp> = self
-            .apps
+        let mut ranked: Vec<RankedApp> = apps_lock
             .iter()
             .filter_map(|app| {
                 let score = score(q, &app.search_terms, &app.normalized_terms)?;
