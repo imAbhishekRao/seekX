@@ -957,6 +957,7 @@ dependencies = [
  "gtk4",
  "gtk4-layer-shell",
  "shlex",
+ "thiserror 1.0.69",
  "urlencoding",
  "walkdir",
  "webbrowser",

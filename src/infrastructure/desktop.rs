@@ -4,16 +4,7 @@ use std::path::{Path, PathBuf};
 
 use walkdir::WalkDir;
 
-#[derive(Clone, Debug)]
-pub struct DesktopApp {
-    pub name: String,
-    pub exec: String,
-    pub icon: Option<String>,
-    pub comment: Option<String>,
-    pub search_text: String,
-    pub search_terms: Vec<String>,
-    pub normalized_terms: Vec<String>,
-}
+use crate::domain::DesktopApp;
 
 pub fn load_installed_apps() -> Vec<DesktopApp> {
     let mut apps = Vec::new();
@@ -135,10 +126,6 @@ fn parse_desktop_file(path: &Path) -> Option<DesktopApp> {
         return None;
     }
 
-    let comment = section
-        .get("Comment")
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty());
     let generic_name = section
         .get("GenericName")
         .map(|value| value.trim().to_string())
@@ -164,9 +151,6 @@ fn parse_desktop_file(path: &Path) -> Option<DesktopApp> {
     }
     if let Some(wm_class) = &wm_class {
         search_parts.push(wm_class.clone());
-    }
-    if let Some(comment) = &comment {
-        search_parts.push(comment.clone());
     }
     if let Some(categories) = section.get("Categories") {
         search_parts.extend(
@@ -195,11 +179,6 @@ fn parse_desktop_file(path: &Path) -> Option<DesktopApp> {
         }
     }
 
-    let search_text = format!(
-        "{} {}",
-        search_parts.join(" ").to_lowercase(),
-        normalized_parts.join(" ")
-    );
     let search_terms = search_parts
         .iter()
         .map(|v| v.to_lowercase())
@@ -209,8 +188,6 @@ fn parse_desktop_file(path: &Path) -> Option<DesktopApp> {
         name,
         exec,
         icon,
-        comment,
-        search_text,
         search_terms,
         normalized_terms: normalized_parts,
     })

@@ -1,10 +1,11 @@
-mod desktop;
-mod launcher;
-mod search;
+mod application;
+mod domain;
+mod infrastructure;
+mod settings;
 mod ui;
 
 fn main() {
-    let apps = desktop::load_installed_apps();
-    let launcher = launcher::Launcher::new(apps);
+    let apps = infrastructure::desktop::load_installed_apps();
+    let launcher = application::Launcher::new(apps);
     ui::run(launcher);
 }

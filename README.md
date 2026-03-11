@@ -141,3 +141,5 @@ More features are coming soon.
 
 ---
 
+# License
+seekX is released under the MIT License. See `LICENSE` for details.
