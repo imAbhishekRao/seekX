@@ -141,6 +141,3 @@ More features are coming soon.
 
 ---
 
-# License
-
-MIT License
