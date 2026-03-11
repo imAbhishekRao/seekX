@@ -70,7 +70,7 @@ fn build_ui(app: &gtk::Application, launcher: Launcher) {
     search_box.add_css_class("seekx-search-box");
 
     let entry = gtk::Entry::builder()
-        .placeholder_text("Search apps or web")
+        .placeholder_text("Search Anything")
         .hexpand(true)
         .build();
     entry.add_css_class("seekx-entry");
@@ -398,7 +398,8 @@ fn refresh_results(
                     container_box.append(&image);
                 }
 
-                let label = gtk::Label::new(Some(&app.app.name));
+                let label = gtk::Label::new(None);
+                label.set_markup(&format_highlighted_label(&app.app.name, trimmed));
                 label.set_xalign(0.0);
                 label.add_css_class("seekx-label");
                 container_box.append(&label);
@@ -412,7 +413,8 @@ fn refresh_results(
 
                 container_box.append(&image);
 
-                let label = gtk::Label::new(Some(&name));
+                let label = gtk::Label::new(None);
+                label.set_markup(&format_highlighted_label(name, trimmed));
                 label.set_xalign(0.0);
                 label.add_css_class("seekx-label");
                 container_box.append(&label);
@@ -442,7 +444,8 @@ fn refresh_results(
                 let vbox = gtk::Box::new(gtk::Orientation::Vertical, 2);
 
                 // filename
-                let name_label = gtk::Label::new(Some(name));
+                let name_label = gtk::Label::new(None);
+                name_label.set_markup(&format_highlighted_label(name, trimmed));
                 name_label.set_xalign(0.0);
                 name_label.add_css_class("seekx-label");
 
@@ -546,5 +549,24 @@ fn install_css() {
             &provider,
             gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
         );
+    }
+}
+
+fn format_highlighted_label(text: &str, query: &str) -> String {
+    if query.is_empty() {
+        return gtk::glib::markup_escape_text(text).to_string();
+    }
+
+    let escaped_text = gtk::glib::markup_escape_text(text);
+
+    if text.to_lowercase().starts_with(&query.to_lowercase()) {
+        let (prefix, suffix) = text.split_at(query.len());
+        format!(
+            "<span foreground='#FF8C00'>{}</span>{}",
+            gtk::glib::markup_escape_text(prefix),
+            gtk::glib::markup_escape_text(suffix)
+        )
+    } else {
+        escaped_text.to_string()
     }
 }
