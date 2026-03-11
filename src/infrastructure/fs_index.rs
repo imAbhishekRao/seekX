@@ -5,7 +5,7 @@ use walkdir::WalkDir;
 
 use crate::ui::ResultItem;
 
-const IGNORED_DIRS: [&str; 6] = ["node_modules", "target", ".cache", ".git", ".local", ".npm"];
+const IGNORED_DIRS: [&str; 8] = ["node_modules", "target", ".cache", ".git", ".local", ".npm", "venv", ".venv"];
 
 #[derive(Clone, Default)]
 pub struct FileIndex {
